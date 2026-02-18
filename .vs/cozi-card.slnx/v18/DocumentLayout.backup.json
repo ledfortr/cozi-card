@@ -3,12 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\cozi-card.ts||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\cozi-card.ts||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\package.json||{3B902123-F8A7-4915-9F01-361F908088D0}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:package.json||{3B902123-F8A7-4915-9F01-361F908088D0}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\cozi-card.ts||{3B902123-F8A7-4915-9F01-361F908088D0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\cozi-card.ts||{3B902123-F8A7-4915-9F01-361F908088D0}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\.prettierrc.js||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:.prettierrc.js||{3B902123-F8A7-4915-9F01-361F908088D0}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\const.ts||{3B902123-F8A7-4915-9F01-361F908088D0}",
@@ -22,24 +26,37 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
+              "Title": ".prettierrc.js",
+              "DocumentMoniker": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\.prettierrc.js",
+              "RelativeDocumentMoniker": ".prettierrc.js",
+              "ToolTip": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\.prettierrc.js",
+              "RelativeToolTip": ".prettierrc.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-02-18T15:55:58.609Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "package.json",
               "DocumentMoniker": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\package.json",
               "RelativeDocumentMoniker": "package.json",
               "ToolTip": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\package.json",
               "RelativeToolTip": "package.json",
-              "ViewState": "AgIAABIAAAAAAAAAAAAAADMAAAAnAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAEMAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
               "WhenOpened": "2026-02-18T15:54:48.569Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "const.ts",
               "DocumentMoniker": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\const.ts",
               "RelativeDocumentMoniker": "src\\const.ts",
@@ -52,13 +69,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "cozi-card.ts",
               "DocumentMoniker": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\cozi-card.ts",
               "RelativeDocumentMoniker": "src\\cozi-card.ts",
               "ToolTip": "C:\\Users\\ledfo.THOR\\OneDrive\\Documents\\GitHub\\cozi-card\\src\\cozi-card.ts",
               "RelativeToolTip": "src\\cozi-card.ts",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADsCAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAA0CAAAAAAAAAAAwwD8CAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
               "WhenOpened": "2026-02-18T15:45:49.636Z",
               "EditorCaption": ""

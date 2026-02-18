@@ -130,23 +130,29 @@ export class CoziCard extends LitElement {
 
   private _handleSelect(ev: Event) {
     const target = ev.target as HTMLSelectElement;
-    if (target) {
+    if (target && target.value) {
       const index = parseInt(target.value, 10);
       this._currentList = this._lists[index];
     }
   }
 
-  private async _handleAdd() {
-    if (this._addValue) {
+  private async _handleAdd(ev: any, itemPos = 0) { // Modified to accept itemPos for headers
+    const input = ev.target.nextElementSibling || ev.target; // Adjusted for header +
+    let index = itemPos;
+    if (index > 0) {
+      index += 1; // Add under the header
+    }
+    if (input.value && input.value.length > 0 && this._currentList) {
       await addItem(this.hass!,
         this._currentList.listId,
-        this._addValue,
-        0, // Add to top
+        input.value,
+        index,
       );
-      this._addValue = '';
-      await this._fetchData();
+      input.value = '';
+      await this._fetchData(); // Refresh after add
       this.requestUpdate();
     }
+    input.focus();
   }
 
   private _handleEdit(id: string, text: string) {
@@ -155,7 +161,7 @@ export class CoziCard extends LitElement {
   }
 
   private async _saveEdit(id: string) {
-    if (this._editValue) {
+    if (this._editValue && this._currentList) {
       await editItem(this.hass!,
         this._currentList.listId,
         id,
@@ -168,14 +174,16 @@ export class CoziCard extends LitElement {
   }
 
   private async _handleMark(id: string, status: boolean) {
-    const newStatus = status ? 'incomplete' : 'complete';
-    await markItem(this.hass!,
-      this._currentList.listId,
-      id,
-      newStatus,
-    );
-    await this._fetchData();
-    this.requestUpdate();
+    if (this._currentList) {
+      const newStatus = status ? 'incomplete' : 'complete';
+      await markItem(this.hass!,
+        this._currentList.listId,
+        id,
+        newStatus,
+      );
+      await this._fetchData();
+      this.requestUpdate();
+    }
   }
 
   private async _handleNewList() {
@@ -185,7 +193,7 @@ export class CoziCard extends LitElement {
         list_type: this._newListType,
       });
       this._newListTitle = '';
-      this._loadLists(); // Refresh lists
+      this._loadLists();
       this.requestUpdate();
     }
   }
@@ -212,7 +220,7 @@ export class CoziCard extends LitElement {
             .path=${mdiRefresh}
             @click=${this._refresh}
           ></ha-svg-icon>
-          ${this._currentList.title}
+          ${this.config.name || this._currentList.title}
         </div>
         <ha-select class="dropdown" label="Select List" @change=${this._handleSelect}>
           ${this._lists.map((list, index) => html`
@@ -224,7 +232,7 @@ export class CoziCard extends LitElement {
             class="addButton"
             .path=${mdiPlus}
             .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
-            @click=${this._handleAdd}
+            @click=${(e) => this._handleAdd(e, 0)}  # Top add with itemPos=0
           ></ha-svg-icon>
           <ha-textfield
             class="addBox"
@@ -299,8 +307,7 @@ export class CoziCard extends LitElement {
           class="addButton"
           .path=${mdiPlus}
           .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
-          .itemPos=${item.itemPos}
-          @click=${this._addItem}
+          @click=${(e) => this._handleAdd(e, item.itemPos)}  # Pass itemPos for under header
         ></ha-svg-icon>
         <ha-textfield
           class="addBox"
@@ -382,12 +389,12 @@ export class CoziCard extends LitElement {
   }
 
   private async _addItem(ev: any): Promise<void> {
-    const input = ev.target.previousElementSibling || ev.target;
+    const input = ev.target.nextElementSibling || ev.target;
     let index = input.itemPos || 0;
     if (index > 0) {
       index += 1;
     }
-    if (input.value.length > 0) {
+    if (input.value.length > 0 && this._currentList) {
       await addItem(this.hass!,
         this._currentList.listId,
         input.value,
@@ -441,10 +448,8 @@ export class CoziCard extends LitElement {
           if (evt.newIndex === undefined || evt.oldIndex === undefined || evt.oldIndex === evt.newIndex) {
             return;
           }
-          // Update local array
           this._allItems!.splice(evt.newIndex, 0, this._allItems!.splice(evt.oldIndex, 1)[0]);
-          // Extract the items in the expected format for reorderItems (array of strings or objects - assuming stringified for original)
-          const itemsList = this._allItems!.map(item => JSON.stringify(item)); // Adjust if reorderItems expects IDs or other format
+          const itemsList = this._allItems!.map(item => JSON.stringify(item));
           await reorderItems(this.hass!, this._currentList.listId, this._currentList.title, itemsList, this._currentList.listType).catch(() =>
             this._fetchData()
           );

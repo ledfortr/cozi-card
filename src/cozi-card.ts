@@ -2,7 +2,7 @@
 import { LitElement, html, TemplateResult, css, PropertyValues, CSSResultGroup } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators';
 import { guard } from "lit/directives/guard.js";
-import { mdiDrag, mdiNotificationClearAll, mdiPlus, mdiSort, mdiRefresh, mdiDelete } from "@mdi/js";
+import { mdiDrag, mdiNotificationClearAll, mdiPlus, mdiSort, mdiRefresh } from "@mdi/js";
 import {
   HomeAssistant,
   hasConfigOrEntityChanged,
@@ -185,17 +185,6 @@ export class CoziCard extends LitElement {
     }
   }
 
-  private async _handleDelete(id: string) {
-    if (this._currentList) {
-      await this.hass.callService('cozi', 'remove_items', {
-        list_id: this._currentList.listId,
-        item_ids: [id],
-      });
-      await this._fetchData();
-      this.requestUpdate();
-    }
-  }
-
   private async _handleNewList() {
     if (this._newListTitle) {
       await this.hass.callService('cozi', 'add_list', {
@@ -298,10 +287,8 @@ export class CoziCard extends LitElement {
 
   private _renderItems(items: ShoppingListItem[]) {
     let content = html``;
-    let currentSectionPos = 0;
     items.forEach((element) => {
       if (element.itemType === "header") {
-        currentSectionPos = element.itemPos || currentSectionPos;
         content = html`${content} ${this._renderHeader(element)}`;
       } else if (element.status) {
         content = html`${content} ${this._renderChecked(element)}`;
@@ -338,20 +325,6 @@ export class CoziCard extends LitElement {
             `
           : ""}
       </div>
-      <div class="addRow item">
-        <ha-svg-icon
-          class="addButton"
-          .path=${mdiPlus}
-          .title=${"Add under this section"}
-          @click=${(e) => this._handleAdd(e, item.itemPos || 0)}
-        ></ha-svg-icon>
-        <ha-textfield
-          class="addBox"
-          .placeholder=${"Add new item under this section..."}
-          .itemPos=${item.itemPos}
-          @keydown=${this._addKeyPress}
-        ></ha-textfield>
-      </div>
     `;
   }
 
@@ -369,13 +342,6 @@ export class CoziCard extends LitElement {
         ` : html`
           <span class="item-text" @click=${() => this._handleEdit(item.itemId, item.text)}>${item.text}</span>
         `}
-        <ha-svg-icon
-          class="deleteButton"
-          .path=${mdiDelete}
-          .title=${"Delete item"}
-          .itemId=${item.itemId}
-          @click=${() => this._handleDelete(item.itemId)}
-        ></ha-svg-icon>
         ${this._reordering
           ? html`
               <ha-svg-icon
@@ -403,13 +369,6 @@ export class CoziCard extends LitElement {
         ` : html`
           <span class="item-text" @click=${() => this._handleEdit(item.itemId, item.text)}>${item.text}</span>
         `}
-        <ha-svg-icon
-          class="deleteButton"
-          .path=${mdiDelete}
-          .title=${"Delete item"}
-          .itemId=${item.itemId}
-          @click=${() => this._handleDelete(item.itemId)}
-        ></ha-svg-icon>
         ${this._reordering
           ? html`
               <ha-svg-icon
@@ -586,10 +545,6 @@ export class CoziCard extends LitElement {
       .item-text {
         flex: 1;
       }
-      .deleteButton {
-        cursor: pointer;
-        margin-left: 8px;
-      }
       .add-input {
         display: flex;
         margin-bottom: 12px;
@@ -619,6 +574,31 @@ export class CoziCard extends LitElement {
         padding: 8px 16px;
         border-radius: 4px;
         cursor: pointer;
+      }
+      .header-row {
+        background: #e3f2fd; // Light blue like Cozi headers
+        padding: 4px 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .header-text {
+        font-weight: bold;
+        color: #1976d2; // Blue text for headers
+      }
+      .deleteButton {
+        cursor: pointer;
+        color: gray;
+      }
+      .checked-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+      }
+      .delete-checked {
+        cursor: pointer;
+        color: #4caf50; // Green for check/delete
       }
     `;
   }

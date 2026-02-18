@@ -8,7 +8,7 @@ import {
   hasConfigOrEntityChanged,
   LovelaceCardEditor,
   getLovelace,
-} from 'custom-card-helpers'; // This is a community maintained npm module with common helper functions/types. https://github.com/custom-cards/custom-card-helpers
+} from 'custom-card-helpers';
 import {
   addItem,
   clearItems,
@@ -19,19 +19,19 @@ import {
   markItem,
 } from "./shopping-list";
 import {
-	loadSortable,
-	SortableInstance,
-  } from "./sortable.ondemand";
+  loadSortable,
+  SortableInstance,
+} from "./sortable.ondemand";
 import type { CoziCardConfig } from './types';
 import {
   CARD_VERSION,
   CARD_TYPE,
   CARD_NAME,
   CARD_DESC,
-  } from './const';
+} from './const';
 import { localize } from './localize/localize';
+import { HassEntity } from 'home-assistant-js-websocket';
 
-// This puts your card into the UI card picker dialog
 (window as any).customCards = (window as any).customCards || [];
 (window as any).customCards.push({
   type: CARD_TYPE,
@@ -39,28 +39,32 @@ import { localize } from './localize/localize';
   description: CARD_DESC,
 });
 
-// TODO Name your custom element
 @customElement('cozi-card')
 export class CoziCard extends LitElement {
-  // TODO Add any properities that should cause your element to re-render here
-  // https://lit.dev/docs/components/properties/
   @property({ attribute: false }) public hass!: HomeAssistant;
   @state() private config!: CoziCardConfig;
   @state() private _allItems?: ShoppingListItem[];
-	@state() private _checkedItems?: ShoppingListItem[];
-	@state() private _reordering = false;
-	@state() private _renderEmptySortable = false;
-	private _sortable?: SortableInstance;
-	@query("#sortable") private _sortableEl?: HTMLElement;
+  @state() private _checkedItems?: ShoppingListItem[];
+  @state() private _reordering = false;
+  @state() private _renderEmptySortable = false;
+  @state() private _currentList!: any; // Current selected list
+  @state() private _lists!: any[]; // All lists from sensor
+  @state() private _addValue = ''; // Input for new item
+  @state() private _editId = ''; // ID of item being edited
+  @state() private _editValue = ''; // Value for editing
+  @state() private _newListTitle = ''; // For new list
+  @state() private _newListType = 'shopping'; // Default type
+  private _sortable?: SortableInstance;
+  @query("#sortable") private _sortableEl?: HTMLElement;
+  firstrun: boolean;
 
-	firstrun: boolean;
-
-	constructor() {
+  constructor() {
     super();
     this._allItems = [];
     this._checkedItems = [];
     this.firstrun = true;
-	}
+    this._lists = [];
+  }
 
   public static async getConfigElement(): Promise<LovelaceCardEditor> {
     await import('./editor');
@@ -71,85 +75,170 @@ export class CoziCard extends LitElement {
     return {};
   }
 
-  // https://lit.dev/docs/components/properties/#accessors-custom
   public setConfig(config: CoziCardConfig): void {
-    // TODO Check for required fields and that they are of the proper format
     if (!config) {
       throw new Error(localize('common.invalid_configuration'));
     }
-    else if (!config.list || config.list.length != 4) {
-      throw new Error(localize('common.invalid_configuration'));
-    }
-
-    if (config.test_gui) {
-      getLovelace().setEditMode(true);
-    }
-
     this.config = {
       ...config,
     };
   }
 
-  // https://lit.dev/docs/components/lifecycle/#reactive-update-cycle-performing
   protected shouldUpdate(changedProps: PropertyValues): boolean {
     if (!this.config) {
       return false;
     }
-
     return hasConfigOrEntityChanged(this, changedProps, true);
   }
 
-  // https://lit.dev/docs/components/rendering/
+  protected updated(changedProps: PropertyValues): void {
+    if (changedProps.has('hass') || changedProps.has('_currentList')) {
+      this._loadLists();
+      this._fetchData();
+    }
+    if (changedProps.has('_reordering') && this._reordering) {
+      this._createSortable();
+    }
+  }
+
+  private _loadLists() {
+    const sensor = this.hass.states['sensor.cozi_lists'] as HassEntity;
+    if (sensor) {
+      this._lists = sensor.attributes.lists || [];
+      if (this._lists.length > 0 && !this._currentList) {
+        this._currentList = this._lists[0]; // Default to first list
+      }
+    }
+  }
+
+  private async _fetchData(): Promise<void> {
+    if (!this.hass || !this._currentList) {
+      return;
+    }
+    const allItems: ShoppingListItem[] = [];
+    const checkedItems: ShoppingListItem[] = [];
+    const items = fetchItems(this._currentList.items); // Use current list items
+    for (const key in items) {
+      allItems.push(items[key]);
+      if (items[key].status) {
+        checkedItems.push(items[key]);
+      }
+    }
+    this._allItems = allItems;
+    this._checkedItems = checkedItems;
+  }
+
+  private _handleSelect(ev: Event) {
+    const target = ev.target as HTMLSelectElement;
+    if (target) {
+      const index = parseInt(target.value, 10);
+      this._currentList = this._lists[index];
+    }
+  }
+
+  private async _handleAdd() {
+    if (this._addValue) {
+      await addItem(this.hass!,
+        this._currentList.listId,
+        this._addValue,
+        0, // Add to top
+      );
+      this._addValue = '';
+      await this._fetchData();
+      this.requestUpdate();
+    }
+  }
+
+  private _handleEdit(id: string, text: string) {
+    this._editId = id;
+    this._editValue = text;
+  }
+
+  private async _saveEdit(id: string) {
+    if (this._editValue) {
+      await editItem(this.hass!,
+        this._currentList.listId,
+        id,
+        this._editValue,
+      );
+      this._editId = '';
+      await this._fetchData();
+      this.requestUpdate();
+    }
+  }
+
+  private async _handleMark(id: string, status: boolean) {
+    const newStatus = status ? 'incomplete' : 'complete';
+    await markItem(this.hass!,
+      this._currentList.listId,
+      id,
+      newStatus,
+    );
+    await this._fetchData();
+    this.requestUpdate();
+  }
+
+  private async _handleNewList() {
+    if (this._newListTitle) {
+      await this.hass.callService('cozi', 'add_list', {
+        list_title: this._newListTitle,
+        list_type: this._newListType,
+      });
+      this._newListTitle = '';
+      this._loadLists(); // Refresh lists
+      this.requestUpdate();
+    }
+  }
+
   protected render(): TemplateResult | void {
-    this._fetchData();
     if (this.firstrun) {
       console.info(
-        `%c  COZI-CARD \n%c  ${localize('common.version')} ${CARD_VERSION}    `,
+        `%c COZI-CARD \n%c ${localize('common.version')} ${CARD_VERSION} `,
         'color: orange; font-weight: bold; background: black',
         'color: white; font-weight: bold; background: dimgray',
       );
       this.firstrun = false;
     }
 
+    if (!this._currentList) {
+      return html`<p>Loading lists...</p>`;
+    }
+
     return html`
       <ha-card>
-      <div class="has-header">
-      <ha-svg-icon
-          class="addButton"
-          .path=${mdiRefresh}
-          @click=${this._refresh}
-        >
-        </ha-svg-icon>
-        ${this.config.name || this.config.list[1]}
-      </div>
+        <div class="has-header">
+          <ha-svg-icon
+            class="addButton"
+            .path=${mdiRefresh}
+            @click=${this._refresh}
+          ></ha-svg-icon>
+          ${this._currentList.title}
+        </div>
+        <ha-select class="dropdown" label="Select List" @change=${this._handleSelect}>
+          ${this._lists.map((list, index) => html`
+            <mwc-list-item value="${index}" .selected=${list.listId === this._currentList.listId}>${list.title}</mwc-list-item>
+          `)}
+        </ha-select>
         <div class="addRow">
           <ha-svg-icon
             class="addButton"
             .path=${mdiPlus}
-            .title=${this.hass!.localize(
-              "ui.panel.lovelace.cards.shopping-list.add_item"
-            )}
-            .itemPos=${0}
-            @click=${this._addItem}
-          >
-          </ha-svg-icon>
+            .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
+            @click=${this._handleAdd}
+          ></ha-svg-icon>
           <ha-textfield
             class="addBox"
-            .placeholder=${this.hass!.localize(
-              "ui.panel.lovelace.cards.shopping-list.add_item"
-            )}
-            .itemPos=${0}
+            .placeholder=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
+            .value=${this._addValue}
+            @input=${(e) => this._addValue = e.target.value}
             @keydown=${this._addKeyPress}
           ></ha-textfield>
           <ha-svg-icon
             class="reorderButton"
             .path=${mdiSort}
-            .title=${this.hass!.localize(
-              "ui.panel.lovelace.cards.shopping-list.reorder_items"
-            )}
+            .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.reorder_items")}
             @click=${this._toggleReorder}
-          >
-          </ha-svg-icon>
+          ></ha-svg-icon>
         </div>
         ${this._reordering
           ? html`
@@ -166,20 +255,25 @@ export class CoziCard extends LitElement {
           ? html`
               <div class="divider"></div>
               <div class="checked">
-                <span></span>
+                <span>Checked Items</span>
                 <ha-svg-icon
                   class="clearall"
                   tabindex="0"
                   .path=${mdiNotificationClearAll}
-                  .title=${this.hass!.localize(
-                    "ui.panel.lovelace.cards.shopping-list.clear_items"
-                  )}
+                  .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.clear_items")}
                   @click=${this._clearItems}
-                >
-                </ha-svg-icon>
+                ></ha-svg-icon>
               </div>
             `
           : ""}
+        <div class="new-list-section">
+          <ha-textfield .value=${this._newListTitle} @input=${(e) => this._newListTitle = e.target.value} placeholder="New list title..."></ha-textfield>
+          <ha-select .value=${this._newListType} @change=${(e) => this._newListType = e.target.value}>
+            <mwc-list-item value="shopping">Shopping</mwc-list-item>
+            <mwc-list-item value="todo">To-Do</mwc-list-item>
+          </ha-select>
+          <button class="new-list-button" @click=${this._handleNewList}>Create New List</button>
+        </div>
       </ha-card>
     `;
   }
@@ -187,214 +281,148 @@ export class CoziCard extends LitElement {
   private _renderItems(items: ShoppingListItem[]) {
     let content = html``;
     items.forEach((element) => {
-      if (element.itemType == "header") {
+      if (element.itemType === "header") {
         content = html`${content} ${this._renderHeader(element)}`;
-      }
-      if (element.status == true) {
+      } else if (element.status) {
         content = html`${content} ${this._renderChecked(element)}`;
-      }
-      if (element.status == false && element.itemType != "header") {
+      } else {
         content = html`${content} ${this._renderUnchecked(element)}`;
       }
-    })
+    });
     return content;
   }
 
   private _renderHeader(item: ShoppingListItem) {
     return html`
-      <div class="addRow item" item=${"{\"itemId\": \"" + item.itemId +
-        "\", " + "\"itemType\": \"" + item.itemType! + "\", " + "\"status\": \"" +
-        item.status + "\", " + "\"text\": \"" + item.text + "\"}"}>
+      <div class="addRow item" item=${JSON.stringify(item)}>
         <ha-svg-icon
-            class="addButton"
-            .path=${mdiPlus}
-            .title=${this.hass!.localize(
-              "ui.panel.lovelace.cards.shopping-list.add_item"
-            )}
-            .itemPos=${item.itemPos}
-            @click=${this._addItem}
-          >
-          </ha-svg-icon>
-          <ha-textfield
-            class="addBox"
-            .placeholder=${item.text}
-            .itemId=${item.itemId}
-            .itemPos=${item.itemPos}
-            @keydown=${this._addKeyPress}
-          ></ha-textfield>
+          class="addButton"
+          .path=${mdiPlus}
+          .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
+          .itemPos=${item.itemPos}
+          @click=${this._addItem}
+        ></ha-svg-icon>
+        <ha-textfield
+          class="addBox"
+          .placeholder=${item.text}
+          .itemId=${item.itemId}
+          .itemPos=${item.itemPos}
+          @keydown=${this._addKeyPress}
+        ></ha-textfield>
         ${this._reordering
-        ? html`
+          ? html`
               <ha-svg-icon
-                .title=${this.hass!.localize(
-          "ui.panel.lovelace.cards.shopping-list.drag_and_drop"
-        )}
+                .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.drag_and_drop")}
                 class="reorderButton"
                 .path=${mdiDrag}
-              >
-              </ha-svg-icon>
+              ></ha-svg-icon>
             `
-        : ""}
+          : ""}
       </div>
     `;
   }
 
   private _renderUnchecked(item: ShoppingListItem) {
     return html`
-      <div class="editRow" item=${"{\"itemId\": \"" + item.itemId +
-      "\", " + "\"itemType\": \"" + item.itemType! + "\", " + "\"status\": \"" +
-      item.status + "\", " + "\"text\": \"" + item.text + "\"}"}>
+      <div class="editRow list-item ${item.itemType === 'header' ? 'item-header' : ''}" item=${JSON.stringify(item)}>
         <ha-checkbox
-          tabindex="0"
+          class="item-checkbox"
           .checked=${item.status}
           .itemId=${item.itemId}
-          @change=${this._completeItem}
+          @change=${() => this._handleMark(item.itemId, item.status)}
         ></ha-checkbox>
-        <ha-textfield
-          class="item"
-          .value=${item.text}
-          .itemId=${item.itemId}
-          @change=${this._saveEdit}
-        ></ha-textfield>
+        ${this._editId === item.itemId ? html`
+          <ha-textfield .value=${this._editValue} @input=${(e) => this._editValue = e.target.value} @blur=${() => this._saveEdit(item.itemId)}></ha-textfield>
+        ` : html`
+          <span class="item-text" @click=${() => this._handleEdit(item.itemId, item.text)}>${item.text}</span>
+        `}
         ${this._reordering
-        ? html`
+          ? html`
               <ha-svg-icon
-                .title=${this.hass!.localize(
-          "ui.panel.lovelace.cards.shopping-list.drag_and_drop"
-        )}
+                .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.drag_and_drop")}
                 class="reorderButton"
                 .path=${mdiDrag}
-              >
-              </ha-svg-icon>
+              ></ha-svg-icon>
             `
-        : ""}
+          : ""}
       </div>
     `;
   }
 
   private _renderChecked(item: ShoppingListItem) {
     return html`
-      <div class="editRow checked" item=${"{\"itemId\": \"" + item.itemId +
-      "\", " + "\"itemType\": \"" + item.itemType! + "\", " + "\"status\": \"" +
-      item.status + "\", " + "\"text\": \"" + item.text + "\"}"}>
+      <div class="editRow checked list-item ${item.itemType === 'header' ? 'item-header' : ''}" item=${JSON.stringify(item)}>
         <ha-checkbox
-          tabindex="0"
+          class="item-checkbox"
           .checked=${item.status}
           .itemId=${item.itemId}
-          @change=${this._completeItem}
+          @change=${() => this._handleMark(item.itemId, item.status)}
         ></ha-checkbox>
-        <ha-textfield
-          class="item"
-          .value=${item.text}
-          .itemId=${item.itemId}
-          @change=${this._saveEdit}
-        ></ha-textfield>
+        ${this._editId === item.itemId ? html`
+          <ha-textfield .value=${this._editValue} @input=${(e) => this._editValue = e.target.value} @blur=${() => this._saveEdit(item.itemId)}></ha-textfield>
+        ` : html`
+          <span class="item-text" @click=${() => this._handleEdit(item.itemId, item.text)}>${item.text}</span>
+        `}
         ${this._reordering
-        ? html`
+          ? html`
               <ha-svg-icon
-                .title=${this.hass!.localize(
-          "ui.panel.lovelace.cards.shopping-list.drag_and_drop"
-        )}
+                .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.drag_and_drop")}
                 class="reorderButton"
                 .path=${mdiDrag}
-              >
-              </ha-svg-icon>
+              ></ha-svg-icon>
             `
-        : ""}
+          : ""}
       </div>
     `;
   }
 
-  private async _fetchData(): Promise<void> {
-		if (!this.hass) {
-		return;
-    }
-    const allItems: ShoppingListItem[] = [];
-		const checkedItems: ShoppingListItem[] = [];
-    const items = fetchItems(this.hass.states["sensor.cozi_lists"].attributes.lists[this.config.list[0]].items); //cannot be async
-    for (const key in items) {
-      allItems.push(items[key]);
-      if (items[key].status) {
-				checkedItems.push(items[key]);
-			}
-    }
-    this._allItems = allItems;
-		this._checkedItems = checkedItems;
-	}
-
   private async _refresh(): Promise<void> {
     await this.hass.callService('cozi', 'refresh');
+    await this._fetchData();
   }
 
-  private async _completeItem(ev): Promise<void> {
-    let status = "";
-    if (ev.target.checked) {
-      status = "complete";
+  private async _addItem(ev: any): Promise<void> {
+    const input = ev.target.previousElementSibling || ev.target;
+    let index = input.itemPos || 0;
+    if (index > 0) {
+      index += 1;
     }
-    else {
-      status = "incomplete";
+    if (input.value.length > 0) {
+      await addItem(this.hass!,
+        this._currentList.listId,
+        input.value,
+        index,
+      );
+      input.value = "";
+      await this._fetchData();
     }
-    await markItem(
-      this.hass!,
-      this.config.list[2],
-      ev.target.itemId,
-      status,
-    );
+    input.focus();
   }
 
-  private async _saveEdit(ev): Promise<void> {
-    await editItem(this.hass!,
-      this.config.list[2],
-      ev.target.itemId,
-      ev.target.value,
-    );
-    ev.target.blur();
+  private _addKeyPress(ev: KeyboardEvent): void {
+    if (ev.keyCode === 13) {
+      this._addItem(ev);
+    }
   }
 
   private async _clearItems(): Promise<void> {
-    if (this.hass) {
+    if (this.hass && this._currentList) {
       const itemIds: string[] = [];
       this._checkedItems!.forEach(element => {
         itemIds.push(element.itemId);
       });
-      await clearItems(this.hass!,
-        this.config.list[2],
+      await clearItems(this.hass,
+        this._currentList.listId,
         itemIds,
       );
-    }
-  }
-
-  private async _addItem(ev): Promise<void> {
-
-    let index = ev.target.itemPos;
-    if (index > 0) {
-      index = index + 1;
-    }
-    if (ev.target.value.length > 0) {
-      await addItem(this.hass!,
-        this.config.list[2],
-        ev.target.value,
-        index,
-      );
-    }
-
-    ev.target.value = "";
-    if (ev) {
-      ev.target.focus();
-    }
-  }
-
-  private _addKeyPress(ev): void {
-    if (ev.keyCode === 13) {
-      this._addItem(ev);
+      await this._fetchData();
     }
   }
 
   private async _toggleReorder() {
     this._reordering = !this._reordering;
     await this.updateComplete;
-    if (this._reordering) {
-      this._createSortable();
-    } else {
+    if (!this._reordering) {
       this._sortable?.destroy();
       this._sortable = undefined;
     }
@@ -403,41 +431,39 @@ export class CoziCard extends LitElement {
   private async _createSortable() {
     const Sortable = await loadSortable();
     const sortableEl = this._sortableEl;
-    this._sortable = new Sortable(sortableEl!, {
-      animation: 150,
-      fallbackClass: "sortable-fallback",
-      dataIdAttr: "item",
-      handle: "ha-svg-icon",
-      onEnd: async (evt) => {
-        if (evt.newIndex === undefined || evt.oldIndex === undefined) {
-          return;
-        }
-        // Since this is `onEnd` event, it's possible that
-        // an item wa dragged away and was put back to its original position.
-        if (evt.oldIndex !== evt.newIndex) {
-          reorderItems(this.hass!, this.config.list[2], this.config.list[1], JSON.parse("[" + this._sortable!.toArray() + "]"), this.config.list[3]).catch(() =>
+    if (sortableEl) {
+      this._sortable = new Sortable(sortableEl, {
+        animation: 150,
+        fallbackClass: "sortable-fallback",
+        dataIdAttr: "item",
+        handle: "ha-svg-icon",
+        onEnd: async (evt) => {
+          if (evt.newIndex === undefined || evt.oldIndex === undefined || evt.oldIndex === evt.newIndex) {
+            return;
+          }
+          // Update local array
+          this._allItems!.splice(evt.newIndex, 0, this._allItems!.splice(evt.oldIndex, 1)[0]);
+          // Extract the items in the expected format for reorderItems (array of strings or objects - assuming stringified for original)
+          const itemsList = this._allItems!.map(item => JSON.stringify(item)); // Adjust if reorderItems expects IDs or other format
+          await reorderItems(this.hass!, this._currentList.listId, this._currentList.title, itemsList, this._currentList.listType).catch(() =>
             this._fetchData()
           );
-          // Move the shopping list item in memory.
-          this._allItems!.splice(
-            evt.newIndex,
-            0,
-            this._allItems!.splice(evt.oldIndex, 1)[0]
-          );
-        }
-        this._renderEmptySortable = true;
-        await this.updateComplete;
-        while (sortableEl?.lastElementChild) {
-          sortableEl.removeChild(sortableEl.lastElementChild);
-        }
-        this._renderEmptySortable = false;
-      },
-    });
+          this._renderEmptySortable = true;
+          await this.updateComplete;
+          while (sortableEl.lastElementChild) {
+            sortableEl.removeChild(sortableEl.lastElementChild);
+          }
+          this._renderEmptySortable = false;
+        },
+      });
+    }
   }
 
-  // https://lit.dev/docs/components/styles/
   static get styles(): CSSResultGroup {
     return css`
+      :host {
+        display: block;
+      }
       ha-card {
         padding: 16px;
         height: 100%;
@@ -445,15 +471,15 @@ export class CoziCard extends LitElement {
       }
       .has-header {
         font-family: var(--paper-font-headline_-_font-family);
-        -webkit-font-smoothing: var(--paper-font-headline_-_-webkit-font-smoothing);
-        font-size: var(--paper-font-headline_-_font-size);
-        font-weight: var(--paper-font-headline_-_font-weight);
-        letter-spacing: var(--paper-font-headline_-_letter-spacing);
-        line-height: var(--paper-font-headline_-_line-height);
-        text-rendering: var(--paper-font-common-expensive-kerning_-_text-rendering);
+        -webkit-font-smoothing: var(--paper-font-headline-_-_-webkit-font-smoothing);
+        font-size: var(--paper-font-headline-_-_font-size);
+        font-weight: var(--paper-font-headline-_-_font-weight);
+        letter-spacing: var(--paper-font-headline-_-_letter-spacing);
+        line-height: var(--paper-font-headline-_-_line-height);
+        text-rendering: var(--paper-font-common-expensive-kerning-_-_text-rendering);
         opacity: var(--dark-primary-opacity);
         padding: 0px 0px 10px 0px;
-        width: 100%
+        width: 100%;
       }
       .editRow,
       .addRow,
@@ -500,6 +526,49 @@ export class CoziCard extends LitElement {
         margin: 10px 0;
       }
       .clearall {
+        cursor: pointer;
+      }
+      .list-item:hover {
+        background: var(--paper-listbox-background-color);
+      }
+      .item-header {
+        font-weight: bold;
+        color: var(--secondary-text-color);
+      }
+      .item-checkbox {
+        margin-right: 8px;
+      }
+      .item-text {
+        flex: 1;
+      }
+      .add-input {
+        display: flex;
+        margin-bottom: 12px;
+      }
+      .add-button {
+        margin-left: 8px;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .dropdown {
+        margin-bottom: 12px;
+        width: 100%;
+      }
+      .new-list-section {
+        margin-top: 16px;
+        border-top: 1px solid var(--divider-color);
+        padding-top: 12px;
+      }
+      .new-list-button {
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
         cursor: pointer;
       }
     `;

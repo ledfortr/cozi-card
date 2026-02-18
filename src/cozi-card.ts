@@ -136,21 +136,20 @@ export class CoziCard extends LitElement {
     }
   }
 
-  private async _handleAdd(ev: any, itemPos = 0) { // Modified to accept itemPos for headers
-    const input = ev.target.nextElementSibling || ev.target; // Adjusted for header +
+  private async _handleAdd(ev: any, itemPos = 0): Promise<void> {
+    const input = ev.target.nextElementSibling || ev.target;
     let index = itemPos;
     if (index > 0) {
-      index += 1; // Add under the header
+      index += 1;
     }
-    if (input.value && input.value.length > 0 && this._currentList) {
+    if (input.value.length > 0 && this._currentList) {
       await addItem(this.hass!,
         this._currentList.listId,
         input.value,
         index,
       );
-      input.value = '';
-      await this._fetchData(); // Refresh after add
-      this.requestUpdate();
+      input.value = "";
+      await this._fetchData();
     }
     input.focus();
   }
@@ -232,7 +231,7 @@ export class CoziCard extends LitElement {
             class="addButton"
             .path=${mdiPlus}
             .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
-            @click=${(e) => this._handleAdd(e, 0)}  # Top add with itemPos=0
+            @click=${(e) => this._handleAdd(e, 0)}
           ></ha-svg-icon>
           <ha-textfield
             class="addBox"
@@ -307,7 +306,7 @@ export class CoziCard extends LitElement {
           class="addButton"
           .path=${mdiPlus}
           .title=${this.hass!.localize("ui.panel.lovelace.cards.shopping-list.add_item")}
-          @click=${(e) => this._handleAdd(e, item.itemPos)}  # Pass itemPos for under header
+          @click=${(e) => this._handleAdd(e, item.itemPos || 0)}
         ></ha-svg-icon>
         <ha-textfield
           class="addBox"
